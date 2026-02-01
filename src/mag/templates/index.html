@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="Mac Agent Gateway - Local macOS HTTP API gateway for Apple services">
+    <meta name="author" content="Eric Blue">
+
+    <title>Mac Agent Gateway</title>
+
+    <!-- Bootstrap core CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Custom styles -->
+    <link href="/static/css/cover.css" rel="stylesheet">
+</head>
+
+<body class="text-center">
+
+<div class="cover-container d-flex h-100 p-3 mx-auto flex-column">
+    <header class="masthead mb-auto">
+        <div class="inner">
+            <h3 class="masthead-brand">Mac Agent Gateway <span class="version-badge">v{{ version }}</span></h3>
+            <nav class="nav nav-masthead justify-content-center">
+                <a class="nav-link active" href="https://github.com/ericblue/mac-agent-gateway">GitHub Project</a>
+                <a class="nav-link" href="/docs">Swagger UI</a>
+                <a class="nav-link" href="/redoc">ReDoc</a>
+            </nav>
+        </div>
+    </header>
+
+    <main role="main" class="inner cover">
+        <h1 class="cover-heading">Mac Agent Gateway</h1>
+        <p class="lead">
+            A local macOS HTTP API gateway for AI agents to access Apple Reminders and Messages.
+            Provides REST API endpoints for interacting with native macOS services via
+            <a href="https://github.com/steipete/remindctl">remindctl</a> and
+            <a href="https://github.com/steipete/imsg">imsg</a>.
+        </p>
+
+        <p class="lead mt-4">
+            <strong>Endpoints:</strong>
+        </p>
+        <p class="lead">
+            <code>/v1/reminders</code> - Manage Apple Reminders<br>
+            <code>/v1/messages</code> - Send iMessages
+        </p>
+
+        <p class="mt-4">
+            <a href="/docs" class="btn btn-lg btn-primary">API Documentation</a>
+        </p>
+
+        <p class="mt-2">
+            <a href="/health" class="btn btn-lg btn-secondary">Health Check</a>
+        </p>
+    </main>
+
+    <footer class="mastfoot mt-auto">
+        <div class="inner">
+            <p>&copy; 2025 <a href="https://eric-blue.com">Eric Blue</a></p>
+        </div>
+    </footer>
+</div>
+
+</body>
+</html>

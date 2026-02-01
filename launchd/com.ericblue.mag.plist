@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+    Mac Agent Gateway (MAG) - launchd configuration
+
+    SECURITY NOTE: This file contains your API key. After copying to
+    ~/Library/LaunchAgents/, restrict permissions:
+
+        chmod 600 ~/Library/LaunchAgents/com.ericblue.mag.plist
+
+    This ensures only your user can read the file.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.ericblue.mag</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <!-- Update this path to your venv Python -->
+        <string>/Users/YOUR_USERNAME/Development/mac-agent-gateway/.venv/bin/python</string>
+        <string>-m</string>
+        <string>mag.main</string>
+    </array>
+
+    <!-- Update this to your mac-agent-gateway directory -->
+    <key>WorkingDirectory</key>
+    <string>/Users/YOUR_USERNAME/Development/mac-agent-gateway</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- Required: Set your API key (use a strong, random value) -->
+        <key>MAG_API_KEY</key>
+        <string>your-secret-api-key</string>
+
+        <!-- Optional: Customize host/port -->
+        <key>MAG_HOST</key>
+        <string>127.0.0.1</string>
+        <key>MAG_PORT</key>
+        <string>8123</string>
+        <key>MAG_LOG_LEVEL</key>
+        <string>INFO</string>
+
+        <!-- Required: Set PYTHONPATH to include src directory -->
+        <key>PYTHONPATH</key>
+        <string>/Users/YOUR_USERNAME/Development/mac-agent-gateway/src</string>
+    </dict>
+
+    <!-- Start automatically at login -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart if the process exits -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!--
+        Log files - stored in the working directory (logs/ folder)
+        These are not world-readable like /tmp
+    -->
+    <key>StandardOutPath</key>
+    <string>/Users/YOUR_USERNAME/Development/mac-agent-gateway/logs/mag.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/YOUR_USERNAME/Development/mac-agent-gateway/logs/mag.error.log</string>
+
+    <!-- Throttle restarts (wait 10 seconds between restart attempts) -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+</dict>
+</plist>
