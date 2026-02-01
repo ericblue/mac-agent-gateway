@@ -345,6 +345,10 @@ make service-uninstall # Remove the plist
 
 All endpoints except `/health` and `/openapi.json` require the `X-API-Key` header.
 
+Interactive API documentation is available at `/docs` (Swagger UI) and `/redoc` (ReDoc):
+
+![Swagger API Documentation](docs/images/mag_swagger_api.png)
+
 ### System Endpoints
 
 | Method | Path | Description |
