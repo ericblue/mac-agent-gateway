@@ -153,17 +153,20 @@ async def _run_imsg_raw(*args: str, timeout: float = 30.0) -> str:
             command=cmd_str,
         )
 
+    stdout_str = stdout.decode("utf-8", errors="replace")
     stderr_str = stderr.decode("utf-8", errors="replace")
 
     if proc.returncode != 0:
+        # imsg outputs errors to stdout (not stderr), so include both in error
+        error_output = stderr_str.strip() or stdout_str.strip()
         raise ImsgError(
             message=f"imsg failed with exit code {proc.returncode}",
             code=proc.returncode or -1,
-            stderr=stderr_str.strip(),
+            stderr=error_output,
             command=cmd_str,
         )
 
-    return stdout.decode("utf-8", errors="replace")
+    return stdout_str
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -452,7 +455,11 @@ async def send_message_v2(
         await _run_imsg_raw(*args[1:])
         return MessageSendResponse(ok=True, to=data.to)
     except ImsgError as e:
-        return MessageSendResponse(ok=False, to=data.to, error=e.message)
+        # Include the actual error output from imsg (in e.stderr) for better debugging
+        error_msg = e.message
+        if e.stderr:
+            error_msg = f"{e.message}: {e.stderr}"
+        return MessageSendResponse(ok=False, to=data.to, error=error_msg)
 
 
 async def reply_to_thread(
