@@ -236,8 +236,9 @@ def _parse_message(data: dict[str, Any]) -> Message:
         if isinstance(raw_attachments, list):
             attachments = [_parse_attachment(a) for a in raw_attachments]
 
-    # Apply PII filtering to message text
-    text = filter_pii(data.get("text"))
+    # Clean binary/invisible chars, then apply PII filtering
+    raw_text = data.get("text")
+    text = filter_pii(_clean_text(raw_text)) if raw_text else filter_pii(raw_text)
 
     return Message(
         id=data.get("id") or data.get("rowid"),
@@ -731,8 +732,8 @@ _URL_PATTERN = re.compile(
 )
 
 
-# Characters to strip from message text (Apple's object replacement chars, etc.)
-_STRIP_CHARS = "\ufffc\ufffd\u200b\u200c\u200d\ufeff"
+# Characters to strip from message text (Apple's object replacement chars, null bytes, etc.)
+_STRIP_CHARS = "\x00\ufffc\ufffd\u200b\u200c\u200d\ufeff"
 
 
 def _clean_text(text: str) -> str:

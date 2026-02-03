@@ -1,5 +1,6 @@
 """Tests for messages API endpoints."""
 
+import os
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -428,6 +429,45 @@ class TestExtractLinks:
             headers=auth_headers,
         )
         assert response.status_code == 400
+
+
+class TestMessageTextCleaning:
+    """Tests for stripping binary/invisible chars from message text."""
+
+    def test_strips_null_bytes_from_message_text(self) -> None:
+        """Message text with leading null bytes should be cleaned."""
+        os.environ["MAG_PII_FILTER"] = "regex"
+        from mag.config import get_settings
+
+        get_settings.cache_clear()
+
+        from mag.services.imsg import _parse_message
+
+        raw = {
+            "id": 1,
+            "chatId": 123,
+            "text": "\x00https://example.com/link",
+            "date": "2026-02-02T12:00:00Z",
+            "isFromMe": True,
+        }
+        msg = _parse_message(raw)
+        assert msg.text == "https://example.com/link"
+        assert "\x00" not in (msg.text or "")
+
+        os.environ["MAG_PII_FILTER"] = ""
+        get_settings.cache_clear()
+
+    def test_strips_replacement_chars_from_links_context(self) -> None:
+        """Extracted link context should not contain replacement chars."""
+        from mag.services.imsg import _clean_text, _extract_urls, _get_link_context
+
+        text = "\ufffd\ufffc\x00https://linkedin.com/posts/activity-123"
+        cleaned = _clean_text(text)
+        assert "\x00" not in cleaned
+        assert "\ufffd" not in cleaned
+        assert "\ufffc" not in cleaned
+        urls = _extract_urls(text)
+        assert urls == ["https://linkedin.com/posts/activity-123"]
 
 
 # =============================================================================

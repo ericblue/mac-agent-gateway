@@ -135,6 +135,14 @@ class TestPIIFilterRegex:
         """Filter should handle empty string."""
         assert filter_pii("") == ""
 
+    def test_filter_preserves_urls_redacts_surrounding_pii(self) -> None:
+        """When filter enabled, URLs pass through; PII in text is redacted."""
+        text = "See https://facebook.com/photo.php?fbid=12345678901234567 - my SSN is 123-45-6789"
+        result = filter_pii(text)
+        assert "https://facebook.com/photo.php?fbid=12345678901234567" in result
+        assert "123-45-6789" not in result
+        assert "[REDACTED-SSN]" in result
+
 
 class TestDirectRegexFilter:
     """Tests for the _filter_regex function directly."""
@@ -149,8 +157,38 @@ class TestDirectRegexFilter:
         assert _filter_regex("123-456-7890") == "123-456-7890"
 
     def test_preserves_urls(self) -> None:
-        """Test that URLs are preserved."""
+        """Test that URLs are preserved unchanged."""
         url = "https://example.com/page?id=12345"
+        assert _filter_regex(url) == url
+
+    def test_preserves_urls_with_long_numeric_ids(self) -> None:
+        """URLs are never filtered - all numeric IDs in URLs stay intact."""
+        urls = [
+            "https://facebook.com/photo.php?fbid=12345678901234567",
+            "https://facebook.com/photo.php?fbid=1431869358467463&set=a.1234567890123456&type=3",
+            "https://linkedin.com/posts/1234567890123456-abc123",
+            "https://linkedin.com/posts/ronnieparsons_activity-1234567890123456-Ixdl",
+            "https://example.com/item?id=4111111111111111",
+        ]
+        for url in urls:
+            assert _filter_regex(url) == url, f"URL should be preserved: {url}"
+
+    def test_preserves_multiple_urls(self) -> None:
+        """Multiple URLs in one message are all preserved."""
+        text = "Check https://a.com/1 and www.b.com/2 and http://c.com?id=4111111111111111"
+        assert _filter_regex(text) == text
+
+    def test_mixed_content_urls_preserved_pii_redacted(self) -> None:
+        """URLs stay intact; PII in surrounding text is redacted."""
+        text = "Check https://facebook.com/photo.php?fbid=12345678901234567 and my card is 4111111111111111"
+        result = _filter_regex(text)
+        assert "https://facebook.com/photo.php?fbid=12345678901234567" in result
+        assert "4111111111111111" not in result
+        assert "[REDACTED-CC]" in result
+
+    def test_message_only_url(self) -> None:
+        """Message that is just a URL passes through unchanged."""
+        url = "https://linkedin.com/posts/user_activity-1234567890123456-Ixdl"
         assert _filter_regex(url) == url
 
     def test_preserves_dates(self) -> None:

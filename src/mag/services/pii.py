@@ -14,6 +14,10 @@ class PIIPattern(NamedTuple):
     replacement: str
 
 
+# URLs are preserved as-is (not filtered). Redacting numeric IDs in shared links
+# breaks them; the chance of a real CC in a URL param is negligible.
+_URL_PATTERN = re.compile(r"https?://\S+|www\.\S+")
+
 # Common PII patterns
 _PII_PATTERNS: list[PIIPattern] = [
     # Social Security Numbers (US)
@@ -87,8 +91,18 @@ def filter_pii(text: str | None) -> str | None:
 
 
 def _filter_regex(text: str) -> str:
-    """Apply regex-based PII filtering."""
-    result = text
+    """Apply regex-based PII filtering. URLs are preserved unchanged."""
+    urls: list[str] = []
+    placeholder = "___MAG_URL_{}___"
+
+    def replace_url(match: re.Match) -> str:
+        urls.append(match.group(0))
+        return placeholder.format(len(urls) - 1)
+
+    text_without_urls = _URL_PATTERN.sub(replace_url, text)
+    result = text_without_urls
     for pattern in _PII_PATTERNS:
         result = pattern.pattern.sub(pattern.replacement, result)
+    for i, url in enumerate(urls):
+        result = result.replace(placeholder.format(i), url)
     return result
