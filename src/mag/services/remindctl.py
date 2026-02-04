@@ -137,10 +137,14 @@ async def list_reminders(
     """List reminders with optional filters."""
     args = ["show"]
 
+    # remindctl show with no filter defaults to "today" - must pass "all" explicitly
+    # to include undated reminders (which are omitted from today/upcoming/etc.)
     if filter_type != ReminderFilter.ALL:
         args.append(filter_type.value)
     elif date:
         args.append(date)
+    else:
+        args.append("all")
 
     if list_name:
         args.extend(["--list", list_name])

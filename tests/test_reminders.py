@@ -1,5 +1,6 @@
 """Tests for reminders API endpoints."""
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -69,6 +70,30 @@ class TestListReminders:
         assert data["error"] == "CLI failed"
         assert data["code"] == 1
         assert data["stderr"] == "error output"
+
+    def test_list_reminders_all_passes_all_to_remindctl(
+        self, client: TestClient, auth_headers: dict, mock_reminder: Reminder
+    ) -> None:
+        """filter=all must pass 'all' to remindctl (default omits undated reminders)."""
+        from mag.models.reminders import ReminderFilter
+
+        with patch("mag.services.remindctl._run_remindctl") as mock_run:
+            mock_run.return_value = [
+                {
+                    "id": mock_reminder.id,
+                    "title": mock_reminder.title,
+                    "list": mock_reminder.list,
+                    "isCompleted": False,
+                }
+            ]
+            import asyncio
+
+            from mag.services import remindctl
+
+            asyncio.run(remindctl.list_reminders(filter_type=ReminderFilter.ALL))
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0]
+            assert "all" in args, "remindctl must receive 'all' to include undated reminders"
 
 
 class TestListReminderLists:
