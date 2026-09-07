@@ -217,6 +217,9 @@ async def update_reminder(reminder_id: str, data: ReminderUpdate) -> Reminder:
 async def complete_reminder(reminder_id: str) -> Reminder:
     """Mark a reminder as complete."""
     result = _run_remindctl("complete", reminder_id)
+    # remindctl returns a list even for a single id, so accept both shapes (bulk_complete does).
+    if isinstance(result, list) and len(result) > 0:
+        return _parse_reminder(result[0])
     if isinstance(result, dict):
         return _parse_reminder(result)
     raise RemindctlError(message="Unexpected response format", code=0, stderr=str(result))
