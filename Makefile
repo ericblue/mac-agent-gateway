@@ -447,7 +447,7 @@ openclaw-skill-install:
 	@echo "Skill files installed (verified)!"
 	@echo ""
 	@echo "Next: Configure credentials in ~/.clawdbot/clawdbot.json:"
-	@echo "  make openclaw-skill-config MAG_URL=http://localhost:8124 MAG_API_KEY=your-key"
+	@echo "  make openclaw-skill-config MAG_URL=http://localhost:8123 MAG_API_KEY=your-key"
 
 # Uninstall skill files from OpenClaw skills directory
 openclaw-skill-uninstall:
@@ -462,16 +462,16 @@ openclaw-skill-uninstall:
 
 # Configure ~/.clawdbot/clawdbot.json with MAG credentials
 # Usage:
-#   make openclaw-skill-config MAG_URL=http://localhost:8124 MAG_API_KEY=your-key
+#   make openclaw-skill-config MAG_URL=http://localhost:8123 MAG_API_KEY=your-key
 openclaw-skill-config:
 	@if [ -z "$(MAG_URL)" ]; then \
 		echo "Error: MAG_URL is required"; \
-		echo "Example: make openclaw-skill-config MAG_URL=http://localhost:8124 MAG_API_KEY=..."; \
+		echo "Example: make openclaw-skill-config MAG_URL=http://localhost:8123 MAG_API_KEY=..."; \
 		exit 1; \
 	fi
 	@if [ -z "$(MAG_API_KEY)" ]; then \
 		echo "Error: MAG_API_KEY is required"; \
-		echo "Example: make openclaw-skill-config MAG_URL=http://localhost:8124 MAG_API_KEY=..."; \
+		echo "Example: make openclaw-skill-config MAG_URL=http://localhost:8123 MAG_API_KEY=..."; \
 		exit 1; \
 	fi
 	@python3 scripts/clawdbot_skill_config.py set --url "$(MAG_URL)" --api-key "$(MAG_API_KEY)"
@@ -479,7 +479,7 @@ openclaw-skill-config:
 
 # Check skill configuration status
 # Usage:
-#   make openclaw-skill-check MAG_URL=http://localhost:8124
+#   make openclaw-skill-check MAG_URL=http://localhost:8123
 openclaw-skill-check:
 	@echo "OpenClaw Skills Status"
 	@echo "======================"
@@ -529,6 +529,54 @@ service-install:
 	@echo "     - Set MAG_API_KEY to a strong, random secret"
 	@echo "     - Set log paths to $(PWD)/logs/mag.log and mag.error.log"
 	@echo "  2. Run: make service-start"
+
+# Install the personal (unsigned, not-for-distribution) MAG skill that drives the mag-mcp
+# tools. Kept out of skills/ because that directory ships signed, public, HTTP-oriented
+# skills; this one is Eric-specific and MCP-oriented.
+#
+# NOTE: this writes the local file only. Whether that alone reaches Cowork, or whether the
+# skill must also be saved in the Claude app, is unverified — see PLAN notes.
+local-skill-install:
+	@mkdir -p $(HOME)/.claude/skills/mag-apple
+	cp skills-local/mag-apple/SKILL.md $(HOME)/.claude/skills/mag-apple/SKILL.md
+	@echo "Installed ~/.claude/skills/mag-apple/SKILL.md"
+	@echo "Start a new Claude Code session to pick it up."
+
+local-skill-uninstall:
+	rm -rf $(HOME)/.claude/skills/mag-apple
+	@echo "Removed ~/.claude/skills/mag-apple"
+
+# ============================================================================
+# MCP Server (Claude Code + Cowork)
+# ============================================================================
+
+# Install the mcp extra into the venv
+mcp-install: venv
+	$(PWD)/.venv/bin/python -m pip install -q -e ".[mcp]"
+	@echo "mag-mcp dependencies installed"
+
+# Register the MCP server with Claude Code (this project)
+mcp-register-code:
+	claude mcp add mag -- $(PWD)/run.sh
+	@echo "Registered. Verify with: claude mcp list"
+
+# Register the MCP server with Claude Desktop / Cowork (backs up the config first)
+mcp-register-desktop:
+	@bash scripts/register_mcp_desktop.sh
+
+# Verify the server speaks MCP and can reach MAG
+mcp-check:
+	@$(PWD)/.venv/bin/python -c "import sys; sys.path.insert(0,'src'); \
+	  from mag_mcp.server import mcp; import asyncio; \
+	  print(f'{len(asyncio.run(mcp.list_tools()))} tools registered')"
+	@MAG_URL=http://127.0.0.1:8123 PYTHONPATH=src $(PWD)/.venv/bin/python -c "import sys; \
+	  sys.path.insert(0,'src'); from mag_mcp.server import mag_status; \
+	  import json; print(json.dumps(mag_status()['health']))"
+
+# Install and start the launchd agent, generating the plist automatically
+# from this repo's path and the MAG_API_KEY in .env (no hand-editing needed).
+service-install-auto:
+	python3 scripts/install_service.py
 
 # Uninstall the launchd plist
 service-uninstall: service-stop

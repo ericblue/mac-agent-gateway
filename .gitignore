@@ -102,3 +102,7 @@ logs/
 # Application data (contains sensitive info)
 data/contacts.json
 data/
+# Personal, non-distributable skills. These carry real phone numbers, contact
+# names and private hostnames — the opposite of skills/, which ships signed
+# public skills. Kept in the tree so `make local-skill-install` works, never committed.
+skills-local/

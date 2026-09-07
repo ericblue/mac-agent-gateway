@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mag"
-version = "0.3.0"
+version = "0.4.0"
 description = "Mac Agent Gateway - Local macOS HTTP API gateway for Apple services"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -33,12 +33,19 @@ dev = [
 signing = [
     "cryptography>=42.0.0",
 ]
+mcp = [
+    # Pinned to 1.x: mcp 2.x renames FastMCP->MCPServer and changes other APIs. 1.29.1 is
+    # verified working in both Claude Code and Cowork; keep the pin until 2.x is tested on
+    # both surfaces.
+    "mcp>=1.2.0,<2",
+    "httpx>=0.26.0",
+]
 
 [project.scripts]
 mag = "mag.main:run"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mag"]
+packages = ["src/mag", "src/mag_mcp"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -2,7 +2,7 @@
 
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from mag.auth import verify_api_key
 from mag.config import get_settings
@@ -29,7 +29,7 @@ _MAX_ID_LENGTH = 200
 
 def _validate_id(value: str, field_name: str) -> str:
     """Validate that an ID or name is safe for CLI usage.
-    
+
     Security: Prevents command injection by restricting characters.
     """
     if len(value) > _MAX_ID_LENGTH:
@@ -139,6 +139,35 @@ async def create_reminder(data: ReminderCreate) -> Reminder:
         raise _handle_cli_error(e)
 
 
+# NOTE: the /bulk/* routes must stay ABOVE the /{reminder_id}/* routes. FastAPI matches
+# in definition order, so /bulk/complete would otherwise be captured by
+# /{reminder_id}/complete with reminder_id="bulk".
+@router.post("/bulk/complete", response_model=list[Reminder])
+async def bulk_complete_reminders(data: BulkIds) -> list[Reminder]:
+    """Mark multiple reminders as complete.
+
+    Provide a list of reminder IDs to complete in one request.
+    """
+    _require_capability("write")
+    try:
+        return await remindctl.bulk_complete(data.ids)
+    except RemindctlError as e:
+        raise _handle_cli_error(e)
+
+
+@router.post("/bulk/delete")
+async def bulk_delete_reminders(data: BulkIds) -> dict:
+    """Delete multiple reminders.
+
+    Provide a list of reminder IDs to delete in one request.
+    """
+    _require_capability("write")
+    try:
+        return await remindctl.bulk_delete(data.ids)
+    except RemindctlError as e:
+        raise _handle_cli_error(e)
+
+
 @router.patch("/{reminder_id}", response_model=Reminder)
 async def update_reminder(reminder_id: str, data: ReminderUpdate) -> Reminder:
     """Update an existing reminder."""
@@ -168,31 +197,5 @@ async def delete_reminder(reminder_id: str) -> dict[str, str]:
     _validate_id(reminder_id, "reminder_id")
     try:
         return await remindctl.delete_reminder(reminder_id)
-    except RemindctlError as e:
-        raise _handle_cli_error(e)
-
-
-@router.post("/bulk/complete", response_model=list[Reminder])
-async def bulk_complete_reminders(data: BulkIds) -> list[Reminder]:
-    """Mark multiple reminders as complete.
-
-    Provide a list of reminder IDs to complete in one request.
-    """
-    _require_capability("write")
-    try:
-        return await remindctl.bulk_complete(data.ids)
-    except RemindctlError as e:
-        raise _handle_cli_error(e)
-
-
-@router.post("/bulk/delete")
-async def bulk_delete_reminders(data: BulkIds) -> dict:
-    """Delete multiple reminders.
-
-    Provide a list of reminder IDs to delete in one request.
-    """
-    _require_capability("write")
-    try:
-        return await remindctl.bulk_delete(data.ids)
     except RemindctlError as e:
         raise _handle_cli_error(e)

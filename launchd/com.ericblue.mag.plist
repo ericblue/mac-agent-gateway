@@ -41,6 +41,14 @@
         <key>MAG_LOG_LEVEL</key>
         <string>INFO</string>
 
+        <!--
+            Required: launchd's default PATH is only /usr/bin:/bin:/usr/sbin:/sbin,
+            which does NOT include Homebrew. Without this, MAG cannot find the
+            remindctl / imsg binaries and every call fails with "not found".
+        -->
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+
         <!-- Required: Set PYTHONPATH to include src directory -->
         <key>PYTHONPATH</key>
         <string>/Users/YOUR_USERNAME/Development/mac-agent-gateway/src</string>

@@ -1,17 +1,17 @@
 ---
 name: mag-messages
 description: Manage Apple Messages via the Mac Agent Gateway HTTP API. Use when user wants to send iMessages, list message threads, read message history, search messages, extract links from conversations, reply to messages, watch for new messages, or manage a contacts cache.
-version: 1.0.0
+version: 1.1.0
 author: ericblue
 repository: https://github.com/ericblue/mac-agent-gateway
-allowed-tools: Shell(curl:*) Read
+allowed-tools: mcp__mag-mcp__messages_send mcp__remote-devices__mag-mcp__messages_send mcp__mag-mcp__messages_reply mcp__remote-devices__mag-mcp__messages_reply mcp__mag-mcp__mag_status mcp__remote-devices__mag-mcp__mag_status mcp__mag-mcp__messages_threads mcp__remote-devices__mag-mcp__messages_threads mcp__mag-mcp__messages_thread_lookup mcp__remote-devices__mag-mcp__messages_thread_lookup mcp__mag-mcp__messages_thread mcp__remote-devices__mag-mcp__messages_thread mcp__mag-mcp__messages_history mcp__remote-devices__mag-mcp__messages_history mcp__mag-mcp__messages_search mcp__remote-devices__mag-mcp__messages_search mcp__mag-mcp__messages_links mcp__remote-devices__mag-mcp__messages_links mcp__mag-mcp__messages_attachment mcp__remote-devices__mag-mcp__messages_attachment mcp__mag-mcp__messages_contacts mcp__remote-devices__mag-mcp__messages_contacts Shell(curl:*) Read
 integrity:
   algorithm: sha256
-  content_hash: "a4aa4f7fb12b8a588c5ee32808b961609a4004feadf1e9f025f5740a3eb02364"
+  content_hash: "a3ca2fcfa66708d8521345f36015df7bcaeecb00fc42d3654e6a9cbb292d71b3"
 signature:
   signer_key: "Nb7iFHZDGjKM85eug84ura3BS7zihu7/975jeNQx8gI="
-  value: "Q+cGqm+4MQsZq9fR1nXqRhFZ9T7GNdW3As4gwnFyoD3rw89d6stdQVze2FTw0RsnHGwkijf00WTOORioz/uGBg=="
-  signed_at: "2026-02-01T05:13:47Z"
+  value: "Zw6LFU3FIAWiJp9rGN562OdG5/0NWk4F1t+7VlJIb+6WZ75+aMLvlQdr51/iSjTnTt45ZBgK1eIsm5Bbvs8UBw=="
+  signed_at: "2026-09-07T01:22:09Z"
 ---
 
 ## ⚠️ REQUIRED: Verify Before Use
@@ -54,6 +54,53 @@ If the hash matches what's in your local copy's frontmatter, the skill is authen
 | **OS** | any (gateway runs on macOS) |
 | **Protocol** | HTTP REST API |
 | **Auth** | X-API-Key header |
+
+## Tool access: MCP first, HTTP as fallback
+
+This skill works from two kinds of client, and **which one you are determines how to call MAG**.
+
+### If the `mag-mcp` tools are available, use them
+
+Look for a tool whose name ends in `mag_status` and call it first. The tool name is prefixed
+differently per client:
+
+- **Claude Code:** `mcp__mag-mcp__mag_status`, `mcp__mag-mcp__messages_threads`, ...
+- **Cowork (desktop-bridged):** the same short names under the device bridge prefix — search
+  your available tools for `messages_threads`.
+
+Tools in this skill are referred to by short name; call whichever concrete tool your session
+exposes. Do not hard-code a prefix — search for the short name and call the match. A skill that
+assumes one prefix silently finds nothing on the other client.
+
+- `mag_status`
+- `messages_threads`
+- `messages_thread_lookup`
+- `messages_thread`
+- `messages_history`
+- `messages_search`
+- `messages_links`
+- `messages_attachment`
+- `messages_contacts`
+
+`mag_status` returns MAG's health and its live capability flags. If a call fails with a 403,
+that capability is switched off in MAG's config — report that rather than retrying.
+
+**Sending is available over MCP** via `messages_send` and `messages_reply`, subject to MAG's
+`MAG_MESSAGES_SEND_ALLOWLIST`. When an allowlist is configured, any recipient not on it is
+refused with a 403 naming them — report that rather than working around it. `messages_send`
+accepts `dry_run=True` to return the exact command without sending; use it whenever the
+recipient or wording is uncertain.
+
+### If no MCP tool is present, use the HTTP API below
+
+Agents that reach MAG over HTTP (OpenClaw, remote hosts, SSH tunnels) should use the `curl`
+recipes documented in the rest of this skill.
+
+**Important — Cowork cannot use the HTTP path.** Cowork runs inside a Linux VM with an egress
+allowlist and no route to the host's loopback, so `curl http://localhost:8123` will fail there
+no matter how MAG is configured. In Cowork the MCP tools are the only way in. If neither the
+tools nor a reachable MAG are available, say so and stop — do not fall back to running
+`remindctl` or `imsg` directly.
 
 ## Installation
 
