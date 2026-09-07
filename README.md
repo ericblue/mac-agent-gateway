@@ -187,7 +187,7 @@ The gateway is now running at `http://localhost:8123`. Visit `/docs` for the int
 - **Python 3.11+**
 - **Homebrew**
 
-When first running, macOS will prompt you to grant Reminders and Messages permissions to Terminal/iTerm.
+When first running, macOS will prompt you to grant Reminders and Messages permissions to Terminal/iTerm. The Messages integration also requires **Full Disk Access** for your terminal app (see [Troubleshooting](#full-disk-access-messages)). If using `screen` or `tmux`, those binaries need Full Disk Access as well.
 
 ## Installation
 
@@ -286,7 +286,28 @@ curl -X POST \
 
 ### Running as a Service (launchd)
 
-To run MAG automatically on startup, use the included launchd plist template.
+To run MAG automatically on startup, install it as a launchd **user agent**.
+
+> **Why not Docker?** MAG cannot run in a container. Its whole job is to invoke
+> `remindctl` and `imsg`, which read Reminders and `~/Library/Messages/chat.db`
+> through macOS TCC. Docker Desktop runs a Linux VM with no Reminders.app, no
+> Messages.app, and no TCC, so a containerized MAG has nothing to talk to. For
+> the same reason it must be a LaunchAgent (user GUI session), not a
+> LaunchDaemon. If you want MAG behind a reverse proxy, run MAG natively and
+> point the proxy at it — see [Behind a reverse proxy](#behind-a-reverse-proxy).
+
+**Quickest path — generate and start the service in one step:**
+
+```bash
+make service-install-auto
+```
+
+This reads `MAG_API_KEY` from `.env`, writes
+`~/Library/LaunchAgents/com.ericblue.mag.plist` with this repo's absolute paths
+(mode 600), and starts it. Re-run it any time to redeploy after a config change.
+
+<details>
+<summary>Manual install (edit the plist yourself)</summary>
 
 **1. Copy and customize the plist:**
 
@@ -324,10 +345,13 @@ tail -f logs/mag.log
 tail -f logs/mag.error.log
 ```
 
-**Or use the Makefile shortcuts:**
+</details>
+
+**Makefile shortcuts:**
 
 ```bash
-make service-install   # Copy plist to LaunchAgents (sets secure permissions)
+make service-install-auto # Generate plist from .env + repo path, then start (recommended)
+make service-install   # Copy the template to LaunchAgents (then edit it by hand)
 make service-start     # Load and start the service
 make service-stop      # Stop the service
 make service-restart   # Restart the service
@@ -340,6 +364,65 @@ make service-uninstall # Remove the plist
 > - The service runs as your user (LaunchAgent), which is required for TCC permissions. Do not use LaunchDaemons (system-level) as they cannot access Reminders/Messages.
 > - `make service-install` sets the plist to mode 600 (owner-only) to protect your API key.
 > - Logs are stored in `logs/` within the project directory, not world-readable `/tmp`.
+> - launchd's default `PATH` is only `/usr/bin:/bin:/usr/sbin:/sbin`, which excludes
+>   Homebrew. The plist sets `PATH` explicitly so `remindctl` and `imsg` resolve.
+
+### Behind a reverse proxy
+
+MAG stays bound to `127.0.0.1` and a reverse proxy fronts it with a friendly
+hostname and TLS. Docker Desktop proxies `host.docker.internal` to the host's
+loopback interface, so a proxy running in a container reaches MAG without MAG
+ever binding a routable address.
+
+Example, using [Traefik](https://traefik.io) to serve MAG at `https://mag.local`:
+
+```yaml
+# dynamic.yml
+http:
+  routers:
+    mag:
+      rule: Host(`mag.local`)
+      service: mag
+      tls: {}
+  services:
+    mag:
+      loadBalancer:
+        servers:
+          - url: http://host.docker.internal:8123
+```
+
+```bash
+# Resolve the hostname locally
+sudo sh -c 'echo "127.0.0.1   mag.local" >> /etc/hosts'
+```
+
+```bash
+# Point shell clients and skills at the proxied URL
+export MAG_URL="https://mag.local"
+curl -H "X-API-Key: $MAG_API_KEY" "$MAG_URL/v1/capabilities"
+```
+
+> **Python clients need the CA explicitly.** `curl` and browsers trust a mkcert certificate
+> because it is installed in the macOS keychain; Python uses the `certifi` bundle instead and
+> will fail with `CERTIFICATE_VERIFY_FAILED` against the same URL. Either export
+> `SSL_CERT_FILE="$(mkcert -CAROOT)/rootCA.pem"` (or `MAG_MCP_CA_BUNDLE` for the MCP server),
+> or point Python clients at `http://127.0.0.1:8123` directly. The bundled MCP server defaults
+> to loopback for exactly this reason — and to avoid depending on the proxy container being up.
+
+> **Note on TLS certificates:** a `*.local` wildcard certificate is **not**
+> sufficient. OpenSSL and browsers refuse to match a wildcard against a
+> single-label parent domain, so `*.local` will not validate for `mag.local`.
+> Issue the certificate with `mag.local` as an explicit SAN:
+>
+> ```bash
+> mkcert "*.local" mag.local   # plus any other hosts you serve
+> ```
+
+> **Security:** the proxy listens on all interfaces, so MAG becomes reachable
+> from your LAN (it was loopback-only before). The `X-API-Key` requirement still
+> applies to every endpoint except `/health`. Consider setting
+> `MAG_MESSAGES_SEND_ALLOWLIST` and disabling unused capabilities before
+> exposing MAG this way.
 
 ## API Reference
 
@@ -708,9 +791,18 @@ See **[EXAMPLES.md](EXAMPLES.md)** for 21+ real-world prompts you can use with A
 
 If you see "access denied" errors:
 
-1. Open **System Preferences → Privacy & Security → Reminders** (or Messages)
+1. Open **System Settings → Privacy & Security → Reminders** (or Messages)
 2. Ensure Terminal/iTerm is checked
 3. Restart the gateway
+
+### Full Disk Access (Messages)
+
+The `imsg` CLI reads `~/Library/Messages/chat.db`, which requires **Full Disk Access** — not just the "Messages" privacy category. If you see `permissionDenied` or `authorization denied (code: 23)` errors:
+
+1. Open **System Settings → Privacy & Security → Full Disk Access**
+2. Enable it for your **terminal application** — this is usually the program that needs access (e.g., iTerm2, Terminal.app, Ghostty, Hyper, cmux, etc.)
+3. If running the gateway inside a terminal multiplexer like **`screen`** or **`tmux`**, those binaries may also need Full Disk Access (e.g., `/usr/local/bin/screen` or `/usr/local/bin/tmux`)
+4. Restart your terminal and the gateway after granting access
 
 ### CLI Not Found
 

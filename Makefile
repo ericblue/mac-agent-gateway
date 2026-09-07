@@ -530,6 +530,11 @@ service-install:
 	@echo "     - Set log paths to $(PWD)/logs/mag.log and mag.error.log"
 	@echo "  2. Run: make service-start"
 
+# Install and start the launchd agent, generating the plist automatically
+# from this repo's path and the MAG_API_KEY in .env (no hand-editing needed).
+service-install-auto:
+	python3 scripts/install_service.py
+
 # Uninstall the launchd plist
 service-uninstall: service-stop
 	@if [ -f $(PLIST_DEST) ]; then \
