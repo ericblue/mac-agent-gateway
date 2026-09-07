@@ -45,8 +45,8 @@ See **[EXAMPLES.md](EXAMPLES.md)** for 21+ real-world prompts and workflows.
 flowchart LR
     subgraph Agents["🤖 AI Agents"]
         direction TB
-        A1["OpenClaw"]
-        A2["Claude Code"]
+        A1["OpenClaw / Hermes"]
+        A2["Claude Code / Cowork"]
         A3["Custom HTTP Client"]
     end
 
@@ -69,7 +69,8 @@ flowchart LR
         MSG["Messages.app"]
     end
 
-    A1 & A2 & A3 -->|"HTTP + API Key"| API
+    A1 & A3 -->|"HTTP + API Key"| API
+    A2 -->|"MCP tools (stdio)"| API
     RC -->|"TCC Granted"| REM
     IM -->|"TCC Granted"| MSG
 
@@ -424,6 +425,132 @@ curl -H "X-API-Key: $MAG_API_KEY" "$MAG_URL/v1/capabilities"
 > `MAG_MESSAGES_SEND_ALLOWLIST` and disabling unused capabilities before
 > exposing MAG this way.
 
+## How agents connect
+
+MAG is reachable two ways, and which one a client uses is dictated by **where that client's
+code actually runs** — not by preference.
+
+```mermaid
+flowchart LR
+    subgraph Host["🖥️ Your Mac"]
+        direction TB
+        CC["Claude Code"]
+        MCPS["mag-mcp server<br/>(stdio, host process)"]
+        MAG["MAG<br/>127.0.0.1:8123"]
+        PROXY["Reverse proxy<br/>https://mag.local<br/>(optional)"]
+        APPLE["Reminders.app<br/>Messages.app"]
+    end
+
+    subgraph VM["📦 Cowork (Linux VM)"]
+        CW["Claude Code in VM<br/>egress allowlisted"]
+    end
+
+    subgraph Net["🌐 Other hosts"]
+        direction TB
+        OC["OpenClaw / Hermes"]
+        VPS["Remote VPS"]
+    end
+
+    CC -->|stdio| MCPS
+    CW -.->|"stdio, bridged by<br/>Claude Desktop"| MCPS
+    MCPS -->|"HTTP + API key"| MAG
+    OC -->|"HTTP + API key"| PROXY
+    VPS -->|"SSH tunnel"| MAG
+    PROXY --> MAG
+    MAG -->|"TCC granted"| APPLE
+
+    style Host fill:#fff3e0,stroke:#e65100
+    style VM fill:#ede7f6,stroke:#4527a0
+    style Net fill:#e1f5fe,stroke:#01579b
+```
+
+### The two paths
+
+| Path | Who uses it | Transport |
+|---|---|---|
+| **MCP tools** | Claude Code, Cowork | stdio to a server running **on the Mac**, which then calls MAG over loopback |
+| **HTTP REST** | OpenClaw, Hermes, remote VPS, any HTTP client | direct to `127.0.0.1:8123`, a reverse proxy, or an SSH tunnel |
+
+The MCP server is not a second gateway. It is a thin translation layer that runs beside MAG on
+the host and forwards to the same REST API, so both paths hit identical capability checks,
+the same send allowlist, and the same TCC-backed CLIs.
+
+### Why Cowork needs MCP specifically
+
+Cowork runs its agent inside a **Linux VM with an allowlisted egress**. That VM has no route to
+the host's loopback interface and no macOS services of its own, so `curl http://localhost:8123`
+fails there regardless of how MAG is configured — and a reverse proxy does not help, because
+the problem is the VM boundary, not the hostname.
+
+What crosses that boundary is stdio. Claude Desktop launches `run.sh` **on the host** and relays
+MCP messages into the VM, so the process holding the API key, the TCC grants, and the loopback
+connection to MAG never leaves your Mac. Nothing about the URL is visible to, or reachable from,
+the VM.
+
+This is also why MAG itself cannot be containerized: Reminders and Messages are gated by macOS
+TCC, which only grants access to a process in your user's GUI session.
+
+### Skills work on both paths
+
+The bundled skills (`skills/mag-reminders`, `skills/mag-messages`) are written to prefer MCP
+tools when a session exposes them and fall back to the documented `curl` recipes when it does
+not — so the same skill file serves Claude Code, Cowork, and an HTTP-only agent like OpenClaw.
+
+Two rules matter when writing your own:
+
+- **Do not hard-code an MCP tool-name prefix.** It is `mcp__mag-mcp__<tool>` in Claude Code and
+  `mcp__remote-devices__mag-mcp__<tool>` in Cowork, and it will change again. Search for the
+  short name (`mag_status`, `reminders_list`) and call whatever matches.
+- **Do not fall back to `curl` in Cowork.** It cannot work there. A skill that quietly retries
+  over HTTP will appear to hang or start improvising answers instead of reporting that the
+  tools are missing.
+
+## MCP server setup
+
+The MCP server ships with MAG (`src/mag_mcp/`). It exposes 18 tools covering reminders
+(read + write), messages (read), sending, and a `mag_status` discovery tool.
+
+```bash
+make mcp-install            # install the mcp extra into the venv
+make mcp-register-code      # register with Claude Code (user scope: every project)
+make mcp-register-desktop   # register with Claude Desktop, which bridges into Cowork
+make mcp-check              # verify the tools load and MAG is reachable
+```
+
+Claude Code picks the server up on the next session; Claude Desktop needs a full quit and
+reopen. Verify with `claude mcp list`, or by asking either client to call `mag_status`.
+
+### Configuration
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `MAG_URL` | `http://127.0.0.1:8123` | Where the server reaches MAG |
+| `MAG_API_KEY` | *(from `.env`)* | Read by `run.sh`; never exposed to the agent |
+| `MAG_MCP_CA_BUNDLE` | *(unset)* | CA bundle when `MAG_URL` is https (see below) |
+| `MAG_MCP_TIMEOUT` | `60` | Seconds; raise for large `scan_limit` searches |
+| `MAG_MCP_ATTACHMENT_DIR` | `~/Downloads/mag-mcp` | Where downloaded attachments land |
+
+`run.sh` pins `MAG_URL` to loopback deliberately. It keeps a `MAG_URL` exported in your shell
+from redirecting the server at a scheme it cannot use, and it avoids making the tools depend on
+a reverse-proxy container being up. To route through the proxy anyway, set
+`MAG_URL_OVERRIDE=https://mag.local` **and** `MAG_MCP_CA_BUNDLE="$(mkcert -CAROOT)/rootCA.pem"`.
+
+### Sending
+
+`messages_send` and `messages_reply` are exposed, but sending is outward-facing and cannot be
+recalled — and these tools are reachable from Cowork. Set `MAG_MESSAGES_SEND_ALLOWLIST` before
+relying on them:
+
+```bash
+MAG_MESSAGES_SEND_ALLOWLIST=+15551234567
+```
+
+MAG enforces the allowlist server-side and refuses anything off it with a 403 naming the
+recipient, so the guarantee does not depend on the MCP server or on a skill behaving well.
+`messages_send` also accepts `dry_run=True`, which returns the exact command without sending.
+
+Every call appends a metadata-only line to `~/.config/mag-mcp/audit.jsonl` (no message bodies).
+
 ## API Reference
 
 All endpoints except `/health` and `/openapi.json` require the `X-API-Key` header.
@@ -597,10 +724,10 @@ make openclaw-skill-install
 # make openclaw-skill-install OPENCLAW_SKILLS_DIR=~/.clawdbot/skills
 
 # 2. Configure credentials in ~/.clawdbot/clawdbot.json
-make openclaw-skill-config MAG_URL=http://localhost:8124 MAG_API_KEY=your-secret-api-key
+make openclaw-skill-config MAG_URL=http://localhost:8123 MAG_API_KEY=your-secret-api-key
 
 # 3. Verify both locations
-make openclaw-skill-check MAG_URL=http://localhost:8124
+make openclaw-skill-check MAG_URL=http://localhost:8123
 ```
 
 After configuration, restart/reload OpenClaw so it picks up the changes.
@@ -616,14 +743,14 @@ Add this to `~/.clawdbot/clawdbot.json`:
       "mag-reminders": {
         "enabled": true,
         "env": {
-          "MAG_URL": "http://localhost:8124",
+          "MAG_URL": "http://localhost:8123",
           "MAG_API_KEY": "your-secret-api-key-here"
         }
       },
       "mag-messages": {
         "enabled": true,
         "env": {
-          "MAG_URL": "http://localhost:8124",
+          "MAG_URL": "http://localhost:8123",
           "MAG_API_KEY": "your-secret-api-key-here"
         }
       }
@@ -848,9 +975,30 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 | Version   | Date       | Description     |
 | --------- | ---------- | --------------- |
+| **0.4.0** | 2026-09-06 | MCP server (Claude Code + Cowork) + startup service |
 | **0.3.0** | 2026-01-31 | Security hardening + Attachment downloads |
 | **0.2.0** | 2026-01-31 | Enhanced Messages API |
 | **0.1.0** | 2026-01-29 | Initial release |
+
+### v0.4.0 — MCP Server + Startup Service
+
+- **MCP server** (`src/mag_mcp/`) — 18 tools over the REST API, so MAG works in Claude Code and
+  Cowork, not just from HTTP clients. Runs on the host over stdio; Claude Desktop bridges it
+  into the Cowork VM, which cannot reach the host over HTTP at all.
+- **Sending is allowlisted** — `messages_send` / `messages_reply` are exposed but constrained by
+  `MAG_MESSAGES_SEND_ALLOWLIST`, enforced inside MAG. `dry_run` previews without sending.
+- **Dual-path skills** — the bundled skills prefer MCP tools where available and fall back to
+  the HTTP recipes, so one skill file serves Claude Code, Cowork, and OpenClaw.
+- **`make service-install-auto`** — generates and starts the launchd agent from `.env` and the
+  repo path (mode 600), replacing the hand-edited plist.
+- **launchd `PATH` fix** — the shipped plist set no `PATH`, and launchd's default excludes
+  Homebrew, so `remindctl` and `imsg` could not be found when run as a service.
+- **Fixed `POST /v1/reminders/{id}/complete`** — returned 500 for every caller; `remindctl`
+  returns a list even for one id.
+- **Fixed `POST /v1/reminders/bulk/complete`** — never reached its handler; the parameterized
+  route was declared first and captured `"bulk"` as a reminder id.
+- **Reverse proxy docs** — including that a `*.local` wildcard cert will not validate for a
+  two-label host, and that Python clients need the CA explicitly.
 
 ### v0.3.0 — Security Hardening + Attachment Downloads
 

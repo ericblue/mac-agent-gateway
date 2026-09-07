@@ -13,7 +13,7 @@ processes running in the user's GUI session.
 Usage:
   python3 scripts/install_service.py            # install and start
   python3 scripts/install_service.py --no-start # install only
-  python3 scripts/install_service.py --port 8124
+  python3 scripts/install_service.py --port 8200
   python3 scripts/install_service.py --uninstall
 
 Equivalent Makefile targets: `make service-install-auto`, `make service-uninstall`.
