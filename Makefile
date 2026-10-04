@@ -20,7 +20,7 @@ PLIST_DEST = $(HOME)/Library/LaunchAgents/$(PLIST_NAME)
 
 # Claude Code skill paths
 CLAUDE_SKILLS_DIR = $(HOME)/.claude/skills
-SKILLS = mag-reminders mag-messages
+SKILLS = mag-reminders mag-messages mag-notes
 
 # Default target
 help:
@@ -373,7 +373,8 @@ claude-skill-install:
 	@echo "  1. Start claude in any directory"
 	@echo "  2. Run: /add ~/.claude/skills/mag-reminders/SKILL.md"
 	@echo "     Or:  /add ~/.claude/skills/mag-messages/SKILL.md"
-	@echo "  3. Or ask: 'Use the mag-reminders skill to list my reminders'"
+	@echo "     Or:  /add ~/.claude/skills/mag-notes/SKILL.md"
+	@echo "  3. Or ask: 'Use the mag-notes skill to search my notes'"
 	@echo ""
 	@echo "Don't forget to set MAG_URL and MAG_API_KEY environment variables!"
 

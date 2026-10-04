@@ -20,7 +20,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from mag import __version__
 from mag.config import Capabilities, get_capabilities, get_settings
-from mag.routers import messages, reminders
+from mag.routers import icloud, messages, notes, reminders
 
 # Access logger for HTTP requests (separate from app logger)
 access_logger = logging.getLogger("mag.access")
@@ -132,7 +132,9 @@ TEMPLATES_DIR = BASE_DIR / "templates"
 
 app = FastAPI(
     title="Mac Agent Gateway",
-    description="Local macOS HTTP API gateway for Apple Reminders and Messages",
+    description=(
+        "Local macOS HTTP API gateway for Apple Reminders, Messages, Notes, and iCloud Drive"
+    ),
     version=__version__,
     docs_url=None,  # Disable default, we'll serve custom
     redoc_url="/redoc",
@@ -159,7 +161,7 @@ app.add_middleware(
         "http://127.0.0.1:3000",
     ],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["X-API-Key", "Content-Type"],
 )
 
@@ -171,6 +173,8 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 app.include_router(reminders.router, prefix="/v1", tags=["reminders"])
 app.include_router(messages.router, prefix="/v1", tags=["messages"])
+app.include_router(notes.router, prefix="/v1", tags=["notes"])
+app.include_router(icloud.router, prefix="/v1", tags=["icloud"])
 
 
 # Placeholder values that should block startup
@@ -271,6 +275,14 @@ async def startup_event() -> None:
         disabled.append("messages.read")
     if not caps.reminders.write:
         disabled.append("reminders.write")
+    if not caps.notes.read:
+        disabled.append("notes.read")
+    if not caps.notes.write:
+        disabled.append("notes.write")
+    if not caps.icloud.read:
+        disabled.append("icloud.read")
+    if not caps.icloud.write:
+        disabled.append("icloud.write")
     if disabled:
         logger.info("Disabled capabilities: %s", ", ".join(disabled))
     

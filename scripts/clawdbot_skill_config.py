@@ -11,6 +11,10 @@ This script updates ~/.clawdbot/clawdbot.json to include:
   skills.entries.mag-messages.env.MAG_URL = <value>
   skills.entries.mag-messages.env.MAG_API_KEY = <value>
 
+  skills.entries.mag-notes.enabled = true
+  skills.entries.mag-notes.env.MAG_URL = <value>
+  skills.entries.mag-notes.env.MAG_API_KEY = <value>
+
 It is idempotent and will create intermediate objects as needed.
 
 Usage:
@@ -28,14 +32,15 @@ import json
 import os
 from typing import Any, Dict
 
-SKILL_NAMES = ["mag-reminders", "mag-messages"]
+SKILL_NAMES = ["mag-reminders", "mag-messages", "mag-notes"]
 DEFAULT_CONFIG_PATH = os.path.expanduser("~/.clawdbot/clawdbot.json")
 
 
 def _load_json(path: str) -> Dict[str, Any]:
     if not os.path.exists(path):
         raise FileNotFoundError(
-            f"OpenClaw config not found at {path}. Run `openclaw configure` first, or create the file."
+            f"OpenClaw config not found at {path}. "
+            "Run `openclaw configure` first, or create the file."
         )
     with open(path, "r", encoding="utf-8") as f:
         try:
@@ -109,7 +114,7 @@ def cmd_check(args: argparse.Namespace) -> int:
 
         env = entry.get("env", {})
         if not isinstance(env, dict):
-            print(f"  Missing or invalid 'env' section")
+            print("  Missing or invalid 'env' section")
             all_ok = False
             continue
 
