@@ -1,17 +1,17 @@
 ---
 name: mag-reminders
 description: Manage Apple Reminders via the Mac Agent Gateway HTTP API. Use when user wants to create reminders, list reminders, update reminders, complete tasks, delete reminders, manage reminder lists, query tasks by date or filter (today, tomorrow, week, overdue, upcoming, completed), or integrate with Apple Reminders from any platform.
-version: 1.0.0
+version: 1.1.0
 author: ericblue
 repository: https://github.com/ericblue/mac-agent-gateway
-allowed-tools: Shell(curl:*) Read
+allowed-tools: mcp__mag-mcp__mag_status mcp__remote-devices__mag-mcp__mag_status mcp__mag-mcp__reminders_list mcp__remote-devices__mag-mcp__reminders_list mcp__mag-mcp__reminders_lists mcp__remote-devices__mag-mcp__reminders_lists mcp__mag-mcp__reminders_create mcp__remote-devices__mag-mcp__reminders_create mcp__mag-mcp__reminders_update mcp__remote-devices__mag-mcp__reminders_update mcp__mag-mcp__reminders_complete mcp__remote-devices__mag-mcp__reminders_complete mcp__mag-mcp__reminders_delete mcp__remote-devices__mag-mcp__reminders_delete mcp__mag-mcp__reminders_manage_list mcp__remote-devices__mag-mcp__reminders_manage_list Shell(curl:*) Read
 integrity:
   algorithm: sha256
-  content_hash: "5d2ce04169d384abc1de13c1efb63660f69fa9b1d73625505e5af7685bd00768"
+  content_hash: "ca8a5b4e9a032a0fc1e3586035ea1772bca6d366bca304e7793c1cddbe36007b"
 signature:
   signer_key: "Nb7iFHZDGjKM85eug84ura3BS7zihu7/975jeNQx8gI="
-  value: "iUv3MAn+eyDeYkOpiL8uGrIw6cOWR1p0WHg7hzqc4RRRST6eT2RXK9yZm4Wi4fYkn64VrRMK9gOQV9WvuUElAw=="
-  signed_at: "2026-02-01T05:13:47Z"
+  value: "m+5ghiQntk/N8x2RqbvhBK03ovqLuswrGiH4DDpcir5EQsWhTXMc96Kw12qawAMmxW+kvxtlrhd2CrprYK5bAg=="
+  signed_at: "2026-09-07T01:22:09Z"
 ---
 
 ## ⚠️ REQUIRED: Verify Before Use
@@ -54,6 +54,46 @@ If the hash matches what's in your local copy's frontmatter, the skill is authen
 | **OS** | any (gateway runs on macOS) |
 | **Protocol** | HTTP REST API |
 | **Auth** | X-API-Key header |
+
+## Tool access: MCP first, HTTP as fallback
+
+This skill works from two kinds of client, and **which one you are determines how to call MAG**.
+
+### If the `mag-mcp` tools are available, use them
+
+Look for a tool whose name ends in `mag_status` and call it first. The tool name is prefixed
+differently per client:
+
+- **Claude Code:** `mcp__mag-mcp__mag_status`, `mcp__mag-mcp__reminders_list`, ...
+- **Cowork (desktop-bridged):** the same short names under the device bridge prefix — search
+  your available tools for `reminders_list`.
+
+Tools in this skill are referred to by short name; call whichever concrete tool your session
+exposes. Do not hard-code a prefix — search for the short name and call the match. A skill that
+assumes one prefix silently finds nothing on the other client.
+
+- `mag_status`
+- `reminders_list`
+- `reminders_lists`
+- `reminders_create`
+- `reminders_update`
+- `reminders_complete`
+- `reminders_delete`
+- `reminders_manage_list`
+
+`mag_status` returns MAG's health and its live capability flags. If a call fails with a 403,
+that capability is switched off in MAG's config — report that rather than retrying.
+
+### If no MCP tool is present, use the HTTP API below
+
+Agents that reach MAG over HTTP (OpenClaw, remote hosts, SSH tunnels) should use the `curl`
+recipes documented in the rest of this skill.
+
+**Important — Cowork cannot use the HTTP path.** Cowork runs inside a Linux VM with an egress
+allowlist and no route to the host's loopback, so `curl http://localhost:8123` will fail there
+no matter how MAG is configured. In Cowork the MCP tools are the only way in. If neither the
+tools nor a reachable MAG are available, say so and stop — do not fall back to running
+`remindctl` or `imsg` directly.
 
 ## Installation
 

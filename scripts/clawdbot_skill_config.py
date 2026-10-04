@@ -18,8 +18,8 @@ This script updates ~/.clawdbot/clawdbot.json to include:
 It is idempotent and will create intermediate objects as needed.
 
 Usage:
-  python3 scripts/clawdbot_skill_config.py set --url http://localhost:8124 --api-key your-key
-  python3 scripts/clawdbot_skill_config.py check --url http://localhost:8124
+  python3 scripts/clawdbot_skill_config.py set --url http://localhost:8123 --api-key your-key
+  python3 scripts/clawdbot_skill_config.py check --url http://localhost:8123
 
 Notes:
 - We do not attempt to restart OpenClaw. After editing, restart/reload the gateway if needed.
@@ -162,7 +162,7 @@ def main() -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     ps = sub.add_parser("set", help="Set/overwrite MAG skill configs in clawdbot.json")
-    ps.add_argument("--url", required=True, help="MAG base URL, e.g. http://localhost:8124")
+    ps.add_argument("--url", required=True, help="MAG base URL, e.g. http://localhost:8123")
     ps.add_argument("--api-key", required=True, help="MAG API key")
     ps.set_defaults(fn=cmd_set)
 
